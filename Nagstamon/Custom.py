@@ -12,7 +12,7 @@ from Nagstamon.Server.Icinga import IcingaServer
 from Nagstamon.Server.Multisite import MultisiteServer
 from Nagstamon.Server.Ninja import NinjaServer
 from Nagstamon.Server.Opsview import OpsviewServer
-
+from Nagstamon.Server.Zabbix import ZabbixServer
 
 # moved registration process because of circular dependencies
 # order of registering affects sorting in server type list in add new server dialog
@@ -22,4 +22,5 @@ register_server(MultisiteServer)
 register_server(IcingaServer)
 register_server(NinjaServer)
 register_server(OpsviewServer)
+register_server(ZabbixServer)
 
