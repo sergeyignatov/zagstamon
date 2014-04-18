@@ -33,11 +33,12 @@ import traceback
 import base64
 import time
 import datetime
-
 from Nagstamon import Actions
 from Nagstamon.Objects import *
 from Nagstamon.Server.Generic import GenericServer
 from Nagstamon.zabbix_api import ZabbixAPI, ZabbixAPIException
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
 
 
 class ZabbixError(Exception):
@@ -55,7 +56,24 @@ class ZabbixServer(GenericServer):
 
     def __init__(self, **kwds):
         GenericServer.__init__(self, **kwds)
-
+        self.States = ["UP", "UNKNOWN", "WARNING", "CRITICAL", "UNREACHABLE", "DOWN", "CRITICAL", "HIGH", "AVERAGE"]
+        self.nagitems_filtered = {"services":
+            {
+                "CRITICAL": [],
+                "HIGH": [],
+                "AVERAGE": [],
+                "WARNING": [],
+                "INFORMATION": [], 
+                "UNKNOWN": [],
+                
+                
+                
+            }, 
+            "hosts":{
+                "DOWN":[], 
+                "UNREACHABLE":[]
+                }
+            }
         # Prepare all urls needed by nagstamon - 
         self.urls = {}
         self.statemap = {}
@@ -64,12 +82,13 @@ class ZabbixServer(GenericServer):
         self.MENU_ACTIONS = ["Recheck", "Acknowledge", "Downtime"]
         self.username = self.conf.servers[self.get_name()].username
         self.password = self.conf.servers[self.get_name()].password
+        self.min_severity = self.conf.servers[self.get_name()].min_severity
 
     def _login(self):
         try:
             self.zapi = ZabbixAPI(server=self.monitor_url, path="", log_level=0)
             self.zapi.login(self.username, self.password)
-        except ZabbixAPIException:
+        except:
             result, error = self.Error(sys.exc_info())
             return Result(result=result, error=error)
 
@@ -81,12 +100,12 @@ class ZabbixServer(GenericServer):
             'WARN': 'WARNING',
             'UNKN': 'UNKNOWN',
             'PEND': 'PENDING',
-            '0': 'OK',
-            '1': 'WARNING',
+            '0': 'UNKNOWN',
+            '1': 'INFORMATION',
             '2': 'WARNING',
-            '5': 'CRITICAL',
-            '3': 'WARNING',
-            '4': 'CRITICAL'}
+            '3': 'AVERAGE',
+            '4': 'HIGH',
+            '5': 'CRITICAL'}
         GenericServer.init_HTTP(self)
 
     def _get_status(self):
@@ -105,18 +124,14 @@ class ZabbixServer(GenericServer):
 
         try:
             hosts = []
-            try:
-                hosts = self.zapi.host.get(
-                    {"output": ["host", "ip", "status", "available", "error", "errors_from"], "filter": {}})
+            hosts = self.zapi.host.get({"output": ["host", "ip", "status", "available", "error", "errors_from"], "filter": {}})
 
-            except ZabbixError, e:
-                if e.terminate:
-                    return e.result
 
             for host in hosts:
                 duration = int(time.time()) - int(host['errors_from'])
                 n = {
                     'host': host['host'],
+                    'hostid':host['hostid'],
                     'status': self.statemap.get(host['available'], host['available']),
                     'last_check': int(time.time()),
                     'duration': duration,
@@ -134,6 +149,7 @@ class ZabbixServer(GenericServer):
                     new_host = n["host"]
                     self.new_hosts[new_host] = GenericHost()
                     self.new_hosts[new_host].name = n["host"]
+                    self.new_hosts[new_host].hostid = n["hostid"]
                     self.new_hosts[new_host].status = n["status"]
                     self.new_hosts[new_host].last_check = n["last_check"]
                     self.new_hosts[new_host].duration = n["duration"]
@@ -149,14 +165,10 @@ class ZabbixServer(GenericServer):
                         if host['host_acknowledged'] == 'yes':
                             self.new_hosts[new_host].acknowledged = True
 
-        except ZabbixError:
-            self.isChecking = False
+        except:
             result, error = self.Error(sys.exc_info())
+            self.isChecking = False
             return Result(result=result, error=error)
-
-        # Add filters to the url which should only be applied to the service request
-        #if str(self.conf.filter_services_on_unreachable_hosts) == "True":
-        #    url_params += '&hst2=0'
 
         # services
         services = []
@@ -165,54 +177,102 @@ class ZabbixServer(GenericServer):
         try:
             response = []
             try:
-                #service = self.zapi.trigger.get({"select_items":"extend","monitored":1,"only_true":1,"min_severity":3,"output":"extend","filter":{}})
-                triggers_list = []
+                choosed_groups = {}
+                exception_set = {}
+                hostgroup_ids = {}
+                zparams = {
+                    'only_true': True,
+                    'output': ['triggerid', 'state', 'error', 'url', 'expression', 'description', 'priority', 'lastchange'],
+                    'selectHosts': ['hostid', 'name'],
+                    'selectGroups': ['groupid', 'name'],
+                    'selectLastEvent': ['eventid', 'acknowledged', 'objectid', 'clock', 'ns'],
+                    'sortfield': ['priority', 'lastchange'],
+                    'sortorder': 'DESC',
+                    'skipDependent': True,
+                    'maintenance': False,
+                    'withUnacknowledgedEvents': True,
+                    'monitored': True,
+                    'expandDescription': True,
+                    'active': True,
+                    'min_severity': self.min_severity,
+                    'expandData': True,
+                    'filter': {'priority': [1,2,3,4,5], 'value': 1}
+                    }
                 if self.monitor_cgi_url:
-                    group_list = self.monitor_cgi_url.split(',')
-                    hostgroup_ids = [x['groupid'] for x in self.zapi.hostgroup.get(
+                    group_list = {x.strip() for x in self.monitor_cgi_url.split(',')}
+                    all_groups = {int(x.get('groupid')) for x in self.zapi.hostgroup.get({'with_monitored_triggers': True})}
+                    if '!' in self.monitor_cgi_url:
+                        exception_set = {int(x.get('groupid')) for x in self.zapi.hostgroup.get({
+                            'with_monitored_items': True,
+                            'output': 'extend',
+                            'filter': {'name': [x[1:] for x in group_list if x.startswith('!')]}}) if int(x.get('internal')) == 0}
+                    else:
+                        exception_set = set()
+
+                    hostgroup_ids = {int(x['groupid']) for x in self.zapi.hostgroup.get(
                         {'output': 'extend',
                          'with_monitored_items': True,
-                         'filter': {"name": group_list}}) if int(x['internal']) == 0]
-                    zabbix_triggers = self.zapi.trigger.get(
-                        {'sortfield': 'lastchange', 'withUnacknowledgedEvents': True, 'groupids': hostgroup_ids,
-                         "monitored": True, "filter": {'value': 1}})
+                         'filter': {'name': [x for x in group_list if not x.startswith('!')]}}) if int(x['internal']) == 0}
+                    if len(hostgroup_ids):
+                        choosed_groups = (all_groups & hostgroup_ids) - exception_set
+                    else:
+                        choosed_groups = all_groups - exception_set
+                    zparams['groupids'] = list(choosed_groups)
+
+                zabbix_triggers = self.zapi.trigger.get(zparams)
+                result_list = []
+                if choosed_groups:
+                    for x in zabbix_triggers:
+                        allowed = True
+                        for y in x.get('groups'):
+                            if int(y.get('groupid')) in exception_set:
+                                allowed = False
+                        if allowed:
+                            result_list.append(x)
                 else:
-                    zabbix_triggers = self.zapi.trigger.get(
-                        {'sortfield': 'lastchange', 'withUnacknowledgedEvents': True, "monitored": True,
-                         "filter": {'value': 1}})
-                triggers_list = []
-                for trigger in zabbix_triggers:
-                    triggers_list.append(trigger.get('triggerid'))
-                this_trigger = self.zapi.trigger.get(
-                    {'triggerids': triggers_list,
-                     'expandDescription': True,
-                     'output': 'extend',
-                     'select_items': 'extend',
-                     'expandData': True}
-                )
-                if type(this_trigger) is dict:
-                    for triggerid in this_trigger.keys():
-                        services.append(this_trigger[triggerid])
-                elif type(this_trigger) is list:
-                    for trigger in this_trigger:
+                    result_list = zabbix_triggers
+
+                if type(result_list) is dict:
+                    for triggerid in result_list.keys():
+                        services.append(result_list[triggerid])
+                elif type(result_list) is list:
+                    for trigger in result_list:
                         services.append(trigger)
 
-            except ZabbixError, e:
-                #print "------------------------------------"
-                #print "%s" % e.result.error
-                if e.terminate:
-                    return e.result
-                else:
-                    service = e.result.content
-                    ret = e.result
+            except:
+                result, error = self.Error(sys.exc_info())
+                self.isChecking = False
+                return Result(result=result, error=error)
+
             for service in services:
-                state = '%s=%s' % (service['items'][0]['key_'], service['items'][0]['lastvalue'])
+                try:
+                    if len(service['items'][0]['key_'])>50:
+                        service['items'][0]['key_'] = '%s...' % service['items'][0]['key_'][0:50]
+
+                    state = '%s=%s' % (service['items'][0]['key_'], service['items'][0]['lastvalue'])
+                except:
+                    state = '%s' % (service['description'])
+                host_api_details = self.zapi.host.get({'hostids': [service['hostid']],
+                                                       'selectGroups': 'extend',
+                                                       'monitored_hosts': True,
+                                                       'output': 'extend'})
+                groups = None
+                #print host_api_details
+                if host_api_details[0].get('groups'):
+                    groups = ','.join([x['name'] for x in host_api_details[0]['groups']])
+                else:
+                    host_api_details = self.zapi.host.get({'hostids': [service['hostid']],
+                                                           'select_groups': 'extend',
+                                                           'monitored_hosts': True,
+                                                           'output': 'extend'})
+                    groups = ",".join([x['name'] for x in host_api_details[0]['groups']])
                 n = {
                     'host': service['host'],
+                    'hostid': service['hostid'],
                     'service': service['description'],
                     'status': self.statemap.get(service['priority'], service['priority']),
                     'attempt': '0/0',
-                    'duration': 60,
+                    'duration': groups,
                     'status_information': state,
                     'passiveonly': 'no',
                     'last_check': datetime.datetime.fromtimestamp(int(service['lastchange'])),
@@ -222,7 +282,6 @@ class ZabbixServer(GenericServer):
                     'command': 'zabbix',
                     'triggerid': service['triggerid'],
                 }
-
                 nagitems["services"].append(n)
                 # after collection data in nagitems create objects of its informations
                 # host objects contain service objects
@@ -236,7 +295,8 @@ class ZabbixServer(GenericServer):
                 if n["service"] not in  self.new_hosts[n["host"]].services:
                     new_service = n["service"]
                     self.new_hosts[n["host"]].services[new_service] = GenericService()
-                    self.new_hosts[n["host"]].services[new_service].host = n["host"]
+                    self.new_hosts[n["host"]].services[new_service].host = (n["host"])
+                    self.new_hosts[n["host"]].services[new_service].hostid = n["hostid"]
                     self.new_hosts[n["host"]].services[new_service].name = n["service"]
                     self.new_hosts[n["host"]].services[new_service].status = n["status"]
                     self.new_hosts[n["host"]].services[new_service].last_check = n["last_check"]
@@ -262,13 +322,12 @@ class ZabbixServer(GenericServer):
                     if 'svc_flapping' in service:
                         if service['svc_flapping'] == 'yes':
                             self.new_hosts[n["host"]].services[new_service].flapping = True
-        except ZabbixError:
+        except:
             # set checking flag back to False
             self.isChecking = False
             result, error = self.Error(sys.exc_info())
             print sys.exc_info()
             return Result(result=result, error=error)
-
         return ret
 
     def _open_browser(self, url):
@@ -300,37 +359,26 @@ class ZabbixServer(GenericServer):
                        debug="Open host/service monitor web page " + url)
         webbrowser.open(url)
 
-    def GetHost(self, host):
+    def GetHostId(self, host):
         """
         find out ip or hostname of given host to access hosts/devices which do not appear in DNS but
         have their ip saved in Nagios
         """
 
         # the fasted method is taking hostname as used in monitor
-        if str(self.conf.connect_by_host) == "True":
-            return Result(result=host)
 
-        ip = ""
+        hostid = ""
 
         try:
             if host in self.hosts:
-                ip = self.hosts[host].address
+                hostid = self.hosts[host].hostid
 
-            if str(self.conf.debug_mode) == "True":
-                self.Debug(server=self.get_name(), host=host, debug="IP of %s:" % host + " " + ip)
 
-            if str(self.conf.connect_by_dns) == "True":
-                try:
-                    address = socket.gethostbyaddr(ip)[0]
-                except:
-                    address = ip
-            else:
-                address = ip
         except ZabbixError:
             result, error = self.Error(sys.exc_info())
             return Result(result=result, error=error)
 
-        return Result(result=address)
+        return Result(result=hostid)
 
     def _set_recheck(self, host, service):
         pass
@@ -349,9 +397,7 @@ class ZabbixServer(GenericServer):
             self._login()
         events = []
         for e in self.zapi.event.get({'triggerids': params['triggerids'],
-                                      'hide_unknown': True,
-                                      'sortfield': 'clock',
-                                      'sortorder': 'desc'}):
+                                      'hide_unknown': True}):
             events.append(e['eventid'])
         self.zapi.event.acknowledge({'eventids': events, 'message': params['message']})
 

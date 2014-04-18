@@ -104,6 +104,10 @@ class GenericServer(object):
         self.unknowns = 0
         self.criticals = 0
         self.warnings = 0
+        self.information = 0
+        self.average = 0
+        self.high = 0
+        
         self.status = ""
         self.status_description = ""
         # needed for looping server thread
@@ -720,7 +724,13 @@ class GenericServer(object):
                 return Result(result=self.status, error=self.status_description)
             
         # this part has been before in GUI.RefreshDisplay() - wrong place, here it needs to be reset
-        self.nagitems_filtered = {"services":{"CRITICAL":[], "WARNING":[], "UNKNOWN":[]}, "hosts":{"DOWN":[], "UNREACHABLE":[]}}      
+        self.nagitems_filtered = {"services":{
+        "CRITICAL":[], 
+        "HIGH": [],
+        "AVERAGE": [],
+        "WARNING":[],
+        "INFORMATION": [], 
+        "UNKNOWN":[]}, "hosts":{"DOWN":[], "UNREACHABLE":[]}}      
 
         # initialize counts for various service/hosts states
         # count them with every miserable host/service respective to their meaning
@@ -728,6 +738,9 @@ class GenericServer(object):
         self.unreachables = 0
         self.unknowns = 0
         self.criticals = 0
+        self.average = 0
+        self.high = 0
+        self.information = 0
         self.warnings = 0
 
         for host in self.new_hosts.values():
@@ -838,7 +851,7 @@ class GenericServer(object):
                     service.visible = False
     
                 real_attempt, max_attempt = service.attempt.split("/")
-                if real_attempt <> max_attempt and str(self.conf.filter_services_in_soft_state) == "True":
+                if real_attempt != max_attempt and str(self.conf.filter_services_in_soft_state) == "True":
                     if str(self.conf.debug_mode) == "True":
                         self.Debug(server=self.get_name(), debug="Filter: SOFT STATE " + str(host.name) + ";" + str(service.name))
                     service.visible = False
@@ -868,7 +881,18 @@ class GenericServer(object):
                         else:
                             self.nagitems_filtered["services"]["CRITICAL"].append(service)
                             self.criticals += 1
-    
+                    if service.status == "HIGH":
+                        self.high +=1
+                        self.nagitems_filtered["services"]["HIGH"].append(service)
+
+                    if service.status == "AVERAGE":
+                        self.average +=1
+                        self.nagitems_filtered["services"]["AVERAGE"].append(service)
+                    
+                    
+   
+
+                    
                     if service.status == "WARNING":
                         if str(self.conf.filter_all_warning_services) == "True":
                             if str(self.conf.debug_mode) == "True":
@@ -877,7 +901,9 @@ class GenericServer(object):
                         else:
                             self.nagitems_filtered["services"]["WARNING"].append(service)
                             self.warnings += 1
-    
+                    if service.status == "INFORMATION":
+                        self.nagitems_filtered["services"]["INFORMATION"].append(service)
+                        self.information +=1
                     if service.status == "UNKNOWN":
                         if str(self.conf.filter_all_unknown_services) == "True":
                             if str(self.conf.debug_mode) == "True":

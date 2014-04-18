@@ -76,7 +76,7 @@ class GUI(object):
 
         # Meta
         self.name = "Nagstamon"
-        self.version = "0.9.9"
+        self.version = "0.9.10.5"
         self.website = "http://nagstamon.ifw-dresden.de/"
         self.copyright = "©2008-2012 Henri Wahl et al.\nh.wahl@ifw-dresden.de"
         self.comments = "Nagios status monitor for your desktop"
@@ -100,9 +100,25 @@ class GUI(object):
         self.current_monitor = 0
 
         # define colors for detailed status table in dictionaries
-        self.TAB_BG_COLORS = { "UNKNOWN":str(self.conf.color_unknown_background), "CRITICAL":str(self.conf.color_critical_background), "WARNING":str(self.conf.color_warning_background), "DOWN":str(self.conf.color_down_background), "UNREACHABLE":str(self.conf.color_unreachable_background)  }
-        self.TAB_FG_COLORS = { "UNKNOWN":str(self.conf.color_unknown_text), "CRITICAL":str(self.conf.color_critical_text), "WARNING":str(self.conf.color_warning_text), "DOWN":str(self.conf.color_down_text), "UNREACHABLE":str(self.conf.color_unreachable_text) }
-
+        self.TAB_BG_COLORS = { 
+                "UNKNOWN": str(self.conf.color_unknown_background), 
+                "CRITICAL": str(self.conf.color_critical_background), 
+                'INFORMATION': str(self.conf.color_information_background),
+                'HIGH': str(self.conf.color_high_background),
+                'AVERAGE': str(self.conf.color_average_background),
+                "WARNING": str(self.conf.color_warning_background), 
+                "DOWN": str(self.conf.color_down_background), 
+                "UNREACHABLE": str(self.conf.color_unreachable_background)  }
+        self.TAB_FG_COLORS = { 
+                "UNKNOWN": str(self.conf.color_unknown_text), 
+                'INFORMATION': str(self.conf.color_information_text),
+                'AVERAGE': str(self.conf.color_average_text),
+                'HIGH': str(self.conf.color_high_text),
+                "CRITICAL": str(self.conf.color_critical_text), 
+                "WARNING": str(self.conf.color_warning_text), 
+                "DOWN": str(self.conf.color_down_text), 
+                "UNREACHABLE": str(self.conf.color_unreachable_text) 
+                }
         # define popwin table liststore types
         self.LISTSTORE_COLUMNS = [gobject.TYPE_STRING, gobject.TYPE_STRING, gobject.TYPE_STRING,\
                                   gobject.TYPE_STRING, gobject.TYPE_STRING, gobject.TYPE_STRING,\
@@ -258,6 +274,9 @@ class GUI(object):
         unknowns = 0
         criticals = 0
         warnings = 0
+        average = 0
+        high = 0
+        information = 0
         # display "ERROR" in case of startup connection trouble
         errors = ""
 
@@ -285,15 +304,21 @@ class GUI(object):
                     # grades of severity
 
                     # summarize states
+                    
                     downs += server.downs
                     unreachables += server.unreachables
                     unknowns += server.unknowns
                     criticals += server.criticals
                     warnings += server.warnings
-
+                    information += server.information
+                    high += server.high
+                    average += server.average
                     # if there is no trouble...
                     if len(server.nagitems_filtered["hosts"]["DOWN"]) == 0 and \
                        len(server.nagitems_filtered["hosts"]["UNREACHABLE"]) == 0 and \
+                       len(server.nagitems_filtered["services"]["INFORMATION"]) == 0 and \
+                       len(server.nagitems_filtered["services"]["AVERAGE"]) == 0 and \
+                       len(server.nagitems_filtered["services"]["HIGH"]) == 0 and \
                        len(server.nagitems_filtered["services"]["CRITICAL"]) == 0 and \
                        len(server.nagitems_filtered["services"]["WARNING"]) == 0 and \
                        len(server.nagitems_filtered["services"]["UNKNOWN"]) == 0 and \
@@ -471,13 +496,26 @@ class GUI(object):
                 if str(self.conf.long_display) == "True": unknowns = str(unknowns) + " UNKNOWN"
                 self.statusbar.statusbar_labeltext = self.statusbar.statusbar_labeltext + '<span size="' + str(self.fontsize) + '" background="' + str(self.conf.color_unknown_background) + '" foreground="' + str(self.conf.color_unknown_text) + '"> ' + str(unknowns) + ' </span>'
                 self.statusbar.statusbar_labeltext_inverted = self.statusbar.statusbar_labeltext_inverted + '<span size="' + str(self.fontsize) + '" background="' + str(self.conf.color_unknown_text) + '" foreground="' + str(self.conf.color_unknown_background) + '"> ' + str(unknowns) + ' </span>'
+            
+            if high > 0:
+                if str(self.conf.long_display) == "True": high = str(high) + " HIGH"
+                self.statusbar.statusbar_labeltext = self.statusbar.statusbar_labeltext + '<span size="' + str(self.fontsize) + '" background="' + str(self.conf.color_high_background) + '" foreground="' + str(self.conf.color_high_text) + '"> ' + str(high) + ' </span>'
+                self.statusbar.statusbar_labeltext_inverted = self.statusbar.statusbar_labeltext_inverted + '<span size="' + str(self.fontsize) + '" background="' + str(self.conf.color_average_text) + '" foreground="' + str(self.conf.color_high_background) + '"> ' + str(high) + ' </span>'    
+            if average > 0:
+                if str(self.conf.long_display) == "True": average = str(average) + " AVERAGE"
+                self.statusbar.statusbar_labeltext = self.statusbar.statusbar_labeltext + '<span size="' + str(self.fontsize) + '" background="' + str(self.conf.color_average_background) + '" foreground="' + str(self.conf.color_average_text) + '"> ' + str(average) + ' </span>'
+                self.statusbar.statusbar_labeltext_inverted = self.statusbar.statusbar_labeltext_inverted + '<span size="' + str(self.fontsize) + '" background="' + str(self.conf.color_average_text) + '" foreground="' + str(self.conf.color_average_background) + '"> ' + str(average) + ' </span>'    
             if warnings > 0:
                 if str(self.conf.long_display) == "True": warnings = str(warnings) + " WARNING"
                 self.statusbar.statusbar_labeltext = self.statusbar.statusbar_labeltext + '<span size="' + str(self.fontsize) + '" background="' + str(self.conf.color_warning_background) + '" foreground="' + str(self.conf.color_warning_text) + '"> ' + str(warnings) + ' </span>'
                 self.statusbar.statusbar_labeltext_inverted = self.statusbar.statusbar_labeltext_inverted + '<span size="' + str(self.fontsize) + '" background="' + str(self.conf.color_warning_text) + '" foreground="' + str(self.conf.color_warning_background) + '"> ' + str(warnings) + ' </span>'               
+            if information > 0:
+                if str(self.conf.long_display) == "True": information = str(information) + " INFORMATION"
+                self.statusbar.statusbar_labeltext = self.statusbar.statusbar_labeltext + '<span size="' + str(self.fontsize) + '" background="' + str(self.conf.color_information_background) + '" foreground="' + str(self.conf.color_information_text) + '"> ' + str(information) + ' </span>'
+                self.statusbar.statusbar_labeltext_inverted = self.statusbar.statusbar_labeltext_inverted + '<span size="' + str(self.fontsize) + '" background="' + str(self.conf.color_information_text) + '" foreground="' + str(self.conf.color_information_background) + '"> ' + str(information) + ' </span>'    
 
             # if connections fails at starting do not display OK - Debian bug #617490
-            if unknowns == 0 and warnings == 0 and criticals == 0 and unreachables == 0 and downs == 0 and self.status_ok is False:
+            if unknowns == 0 and warnings == 0 and average ==0 and information == 0 and high ==0 and criticals == 0 and unreachables == 0 and downs == 0 and self.status_ok is False:
                 if str(self.conf.long_display) == "True":
                     errors = "ERROR"
                 else:
@@ -495,9 +533,9 @@ class GUI(object):
                 self.statusbar.Resize()
 
             # choose icon for systray  - the worst case decides the shown color
-            if warnings > 0: color = "yellow"
-            if unknowns > 0: color = "orange"
-            if criticals > 0: color = "red"
+            if warnings > 0 or information >0: color = "yellow"
+            if unknowns > 0 or average >0: color = "orange"
+            if criticals > 0 or high >0: color = "red"
             if unreachables > 0: color = "darkred"
             if downs > 0: color = "black"
 
@@ -1530,9 +1568,26 @@ class Popwin(object):
         # define colors for detailed status table in dictionaries
         # need to be redefined here for MacOSX because there it is not
         # possible to reinitialize the whole GUI after config changes without a crash
-        self.output.TAB_BG_COLORS = { "UNKNOWN":str(self.conf.color_unknown_background), "CRITICAL":str(self.conf.color_critical_background), "WARNING":str(self.conf.color_warning_background), "DOWN":str(self.conf.color_down_background), "UNREACHABLE":str(self.conf.color_unreachable_background)  }
-        self.output.TAB_FG_COLORS = { "UNKNOWN":str(self.conf.color_unknown_text), "CRITICAL":str(self.conf.color_critical_text), "WARNING":str(self.conf.color_warning_text), "DOWN":str(self.conf.color_down_text), "UNREACHABLE":str(self.conf.color_unreachable_text) }
-
+        self.output.TAB_BG_COLORS = { 
+                "UNKNOWN": str(self.conf.color_unknown_background), 
+                "CRITICAL": str(self.conf.color_critical_background), 
+                'INFORMATION': str(self.conf.color_information_background),
+                'HIGH': str(self.conf.color_high_background),
+                'AVERAGE': str(self.conf.color_average_background),
+                "WARNING": str(self.conf.color_warning_background), 
+                "DOWN": str(self.conf.color_down_background), 
+                "UNREACHABLE": str(self.conf.color_unreachable_background)  }
+        self.output.TAB_FG_COLORS = { 
+                "UNKNOWN": str(self.conf.color_unknown_text), 
+                'INFORMATION': str(self.conf.color_information_text),
+                'AVERAGE': str(self.conf.color_average_text),
+                'HIGH': str(self.conf.color_high_text),
+                "CRITICAL": str(self.conf.color_critical_text), 
+                "WARNING": str(self.conf.color_warning_text), 
+                "DOWN": str(self.conf.color_down_text), 
+                "UNREACHABLE": str(self.conf.color_unreachable_text) 
+                }
+       
         # for later calculation of the popwin size we need the height of the buttons
         # it is enough to choose one of those buttons because they all have the same dimensions
         # as it seems to be the largest one we choose ComboboxMonitor
@@ -2304,7 +2359,6 @@ class ServerVBox(gtk.VBox):
         """
         server.username, server.password = self.AuthEntryUsername.get_text(), self.AuthEntryPassword.get_text()
         server.refresh_authentication = False
-
         if self.AuthCheckbuttonSave.get_active() == True:
             # store authentication information in config
             server.conf.servers[server.get_name()].username = server.username
@@ -2583,8 +2637,11 @@ class Settings(object):
             values of the config object
             after this the config file gets saved.
         """
-        keys = self.conf.__dict__.keys()       
-        for i in ["input_entry_", "input_checkbutton_", "input_radiobutton_", "input_spinbutton_", "input_filechooser_"]:
+        keys = self.conf.__dict__.keys()
+        for i in ["input_entry_", "input_checkbutton_",
+                  "input_radiobutton_",
+                  "input_spinbutton_",
+                  "input_filechooser_"]:
             for key in keys:
                 j = self.builder.get_object(i + key)
                 if not j:
@@ -2866,11 +2923,11 @@ class GenericServer(object):
         self.dialog = self.builder.get_object("settings_server_dialog")
 
         # assign handlers
-        handlers_dict = { "button_ok_clicked" : self.OK,
-                          "button_cancel_clicked" : self.Cancel,
-                          "settings_dialog_close" : self.Cancel, 
-                          "toggle_save_password" : self.ToggleSavePassword,
-                          "toggle_proxy" : self.ToggleProxy 
+        handlers_dict = { "button_ok_clicked": self.OK,
+                          "button_cancel_clicked": self.Cancel,
+                          "settings_dialog_close": self.Cancel,
+                          "toggle_save_password": self.ToggleSavePassword,
+                          "toggle_proxy": self.ToggleProxy
                           }
         self.builder.connect_signals(handlers_dict)
 
@@ -2887,6 +2944,17 @@ class GenericServer(object):
             combomodel.append((server,))
         self.combobox.set_model(combomodel)
         self.combobox.set_active(0)
+
+        self.combo_severity = self.builder.get_object("input_combo_severity")
+        cr = gtk.CellRendererText()
+        self.combo_severity.pack_start(cr, True)
+
+        combo_severity = gtk.ListStore(gobject.TYPE_STRING)
+        self.combo_severity.set_attributes(cr, text=0)
+        for k, v in enumerate(['Information', 'warning', 'average', 'high', 'disaster']):
+            combo_severity.append((v, ))
+        self.combo_severity.set_model(combo_severity)
+        self.combo_severity.set_active(0)
 
         self.combobox.connect('changed', self.on_server_type_change)
         # initialize server type dependent dialog outfit
@@ -2932,7 +3000,6 @@ class GenericServer(object):
         # put changed data into new server, which will get into the servers dictionary after the old
         # one has been deleted
         new_server = Config.Server()
-
         keys = new_server.__dict__.keys()
         for i in ["input_entry_", "input_checkbutton_", "input_radiobutton_", "input_spinbutton_", "input_filechooser_"]:
             for key in keys:
@@ -3115,7 +3182,7 @@ class EditServer(GenericServer):
             server_types = dict([(x[1], x[0]) for x in enumerate(servers)])
 
             self.combobox.set_active(server_types[self.conf.servers[self.server].type])
-
+            self.combo_severity.set_active(int(self.conf.servers[self.server].min_severity)-1)
             # show password - or not
             self.ToggleSavePassword()
             # show settings options for proxy - or not
@@ -3133,7 +3200,7 @@ class EditServer(GenericServer):
         # put changed data into new server, which will get into the servers dictionary after the old
         # one has been deleted
         new_server = Config.Server()
-
+        
         keys = new_server.__dict__.keys()
         for i in ["input_entry_", "input_checkbutton_", "input_radiobutton_", "input_spinbutton_", "input_filechooser_"]:
             for key in keys:
@@ -3161,6 +3228,11 @@ class EditServer(GenericServer):
         model = combobox.get_model()
         new_server.__dict__["type"] = model.get_value(active, 0)   
 
+        combobox = self.builder.get_object("input_combo_severity")
+        active = combobox.get_active()
+        
+        new_server.__dict__["min_severity"] = active + 1 
+        
         # workaround for cgi-url not needed by certain monitor types
         server = Actions.get_registered_servers()[new_server.type]
         if "input_entry_monitor_cgi_url" in server.DISABLED_CONTROLS:
@@ -3521,7 +3593,7 @@ class AuthenticationDialog:
         self.server.username = self.entry_username.get_text()
         self.server.password = self.entry_password.get_text()
         toggle_save_password = self.builder.get_object("input_checkbutton_save_password")
-
+        
         if toggle_save_password.get_active() == True:
             # store authentication information in config
             self.conf.servers[self.server.name].username = self.server.username

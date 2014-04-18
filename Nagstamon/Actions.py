@@ -98,6 +98,7 @@ class RefreshLoopOneServer(threading.Thread):
                     gobject.idle_add(self.output.popwin.UpdateStatus, self.server)
                     # get current status
                     server_status = self.server.GetStatus(output=self.output)
+                    
                     # GTK/Pango does not like tag brackets < and >, so clean them out from description
                     server_status.error = server_status.error.replace("<", "").replace(">", "").replace("\n", " ")
                     # debug
@@ -403,13 +404,13 @@ class CheckForNewVersion(threading.Thread):
                 # set the flag to lock that connection
                 s.CheckingForNewVersion = True
                 # remove newline
-                result = s.FetchURL("http://nagstamon.sourceforge.net/latest_version_" + self.output.version, giveback="raw")
+                result = s.FetchURL("http://nagstamon/checkversion/" + self.output.version, giveback="raw")
                 version, error = result.result.split("\n")[0], result.error
                 
                 # debug
                 if str(self.output.conf.debug_mode) == "True":
                     # once again taking .Debug() from first server
-                    self.servers.values()[0].Debug(debug="Latest version from sourceforge.net: " + str(version))
+                    self.servers.values()[0].Debug(debug="Latest version from nagstamon.aton.global: " + str(version))
                 
                 # if we got a result notify user
                 if error == "":
@@ -544,6 +545,7 @@ class Action(threading.Thread):
         # add all keywords to object
         self.host = ""
         self.service = ""
+        self.hostid = ""
         for k in kwds: self.__dict__[k] = kwds[k]
         threading.Thread.__init__(self)
         self.setDaemon(1)
@@ -575,6 +577,7 @@ class Action(threading.Thread):
                 
             # mapping of variables and values
             mapping = { "$HOST$": self.host,\
+                        "$HOSTID$": self.server.GetHostId(self.host).result,\
                         "$SERVICE$": self.service,\
                         "$ADDRESS$": self.server.GetHost(self.host).result,\
                         "$MONITOR$": self.server.monitor_url,\
@@ -759,7 +762,7 @@ def OpenNagstamonDownload(output=None):
     # first close popwin
     output.popwin.Close()
     # start browser with URL
-    webbrowser.open("http://nagstamon.sourceforge.net/download")
+    webbrowser.open("http://nagstamon/latest")
        
 
 def IsFoundByRE(string, pattern, reverse):

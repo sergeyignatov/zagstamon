@@ -66,6 +66,10 @@ class Config(object):
         self.notify_if_unknown = True
         self.notify_if_unreachable = True
         self.notify_if_down = True
+        self.notify_if_average = True
+        self.notify_if_high = True
+        self.notify_if_information = True
+        
         self.re_host_enabled = False
         self.re_host_pattern = ""
         self.re_host_reverse = False
@@ -80,7 +84,7 @@ class Config(object):
         self.color_warning_text = self.default_color_warning_text = "#000000"
         self.color_warning_background = self.default_color_warning_background = "#FFFF00"
         self.color_critical_text = self.default_color_critical_text = "#FFFFFF"
-        self.color_critical_background = self.default_color_critical_background = "#FF0000"
+        self.color_critical_background = self.default_color_critical_background = "#FF3838"
         self.color_unknown_text = self.default_color_unknown_text = "#000000"
         self.color_unknown_background = self.default_color_unknown_background = "#FFA500"
         self.color_unreachable_text = self.default_color_unreachable_text = "#FFFFFF"
@@ -89,6 +93,16 @@ class Config(object):
         self.color_down_background = self.default_color_down_background = "#000000"
         self.color_error_text = self.default_color_error_text= "#000000"
         self.color_error_background = self.default_color_error_background = "#D3D3D3"
+        
+        self.color_information_text = self.default_color_warning_text = "#000000"
+        self.color_information_background = self.default_color_warning_background = "#D6F6FF"
+        self.color_high_text = self.default_color_critical_text = "#000000"
+        self.color_high_background = self.default_color_critical_background = "#FF9999"
+        self.color_average_text = self.default_color_critical_text = "#000000"
+        self.color_average_background = self.default_color_critical_background = "#FFB689"
+        
+
+
         self.statusbar_systray = False
         self.statusbar_floating = True
         self.icon_in_systray = False  
@@ -562,7 +576,11 @@ class Config(object):
         create some default actions like SSH and so on
         """
         if platform.system() == "Windows":
-            defaultactions = { "RDP": Action(name="RDP", description="Connect via RDP.",\
+            defaultactions = {  "Open in browser":Action(name="Open in browser", type="browser",\
+                                    description="Open in browser",\
+                                    enabled=True,filter_target_host=True,
+                                    string="$MONITOR$/tr_status.php?hostid=$HOSTID$"),
+                                "RDP": Action(name="RDP", description="Connect via RDP.",\
                                     type="command", string="C:\windows\system32\mstsc.exe $ADDRESS$"),\
                                "VNC": Action(name="VNC", description="Connect via VNC.",\
                                     type="command", string="C:\Program Files\TightVNC\vncviewer.exe $ADDRESS$"),\
@@ -583,7 +601,12 @@ class Config(object):
                                }
         else:
             # the Linux settings
-            defaultactions = { "RDP": Action(name="RDP", description="Connect via RDP.",\
+            defaultactions = { 
+                    "Open in browser":Action(name="Open in browser", type="browser",\
+                                                                description="Open in browser",\
+                                                                                                    enabled=True,filter_target_host=True,
+                                                                                                                                        string="$MONITOR$/tr_status.php?hostid=$HOSTID$"),
+                               "RDP": Action(name="RDP", description="Connect via RDP.",\
                                     type="command", string="/usr/bin/rdesktop -g 1024x768 $ADDRESS$"),\
                                "VNC": Action(name="VNC", description="Connect via VNC.",\
                                     type="command", string="/usr/bin/vncviewer $ADDRESS$"),\
@@ -596,6 +619,11 @@ class Config(object):
                                     enabled=False)\
                                }
         # OS agnostic actions as examples
+        defaultactions["Open in browser"] = Action(name="Open in browser", type="browser",\
+                         description="Open in browser",\
+                         enabled=True,filter_target_host=True,
+                         string="$MONITOR$/tr_status.php?hostid=$HOSTID$")
+                
         defaultactions["Nagios-1-Click-Acknowledge-Host"] = Action(name="Nagios-1-Click-Acknowledge-Host", type="url",\
                                                     description="Acknowledges a host with one click.",\
                                                     filter_target_service=False, enabled=False,\
@@ -658,6 +686,7 @@ class Server(object):
     def __init__(self):
         self.enabled = True
         self.type = "Nagios"
+        self.min_severity = 2
         self.name = ""
         self.monitor_url = ""
         self.monitor_cgi_url = ""

@@ -37,7 +37,11 @@ CLASSIFIERS = [
 ]
 
 setup(name = 'nagstamon',
+<<<<<<< HEAD
+    version = '0.9.10.1',
+=======
     version = '0.9.9',
+>>>>>>> 0e69e63c53db74833ba8283b0d65b21d07b5370c
     license = 'GNU GPL v2',
     description = 'Nagios status monitor for desktop',
     long_description = 'Nagstamon is a Nagios status monitor which takes place in systray or on desktop (GNOME, KDE, Windows) as floating statusbar to inform you in realtime about the status of your Nagios and derivatives monitored network. It allows to connect to multiple Nagios, Icinga, Opsview, Op5, Check_MK/Multisite and Centreon servers.',
